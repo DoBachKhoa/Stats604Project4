@@ -1,0 +1,6 @@
+tqdm
+scipy
+pandas
+matplotlib
+notebook
+meteostat
