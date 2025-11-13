@@ -1,6 +1,9 @@
 tqdm
 scipy
 pandas
+sklearn
+pickle
 matplotlib
 notebook
 meteostat
+jupytext

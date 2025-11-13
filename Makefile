@@ -9,20 +9,18 @@ VENV_PIP := $(VENV_DIR)/bin/$(PIP)
 # Virtual environment
 
 $(VENV_DIR) : requirements.txt # check requirement changes
-	$(PY) -m venv $(VENV_DIR)
-	$(VENV_PIP) install -r requirements.txt
-	touch $(VENV_DIR)
+	@$(PY) -m venv $(VENV_DIR)
+	@$(VENV_PIP) install -r requirements.txt
+	@touch $(VENV_DIR)
 
 predictions : $(VENV_DIR)
-	$(VENV_PY) src/dummy.py
+	@$(VENV_PY) src/dummy.py
 
 venv : $(VENV_DIR)
 
 # Clean ups
 clean : 
-	rm -rf $(VENV_DIR)
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
-	find . -type d -name ".pytest_cache"  -exec rm -rf {} +
-
-
+	@rm -rf $(VENV_DIR)
+	@find . -type f -name "*.pyc" -delete
+	@find . -type d -name "__pycache__" -delete
+	@find . -type d -name ".pytest_cache"  -exec rm -rf {} +
