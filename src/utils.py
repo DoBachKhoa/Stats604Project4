@@ -1,6 +1,19 @@
+import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from constants import THANKSGIVING
+
+def slide_week_day(week1, week2, day1, day2, daystart=0):
+    if day1 == None: day1 = daystart
+    if day2 == None: day2 = daystart
+    output = [[day1, week1]]
+    d, w = day1, week1
+    while True:
+        d += 1
+        if d == 7: d = 0
+        if d == daystart: w += 1
+        if w == week2 and d == day2: return output
+        else: output.append([d, w])
 
 def add_relative_week_column(df, date_col, year, week_start=0):
     """
@@ -35,6 +48,41 @@ def add_relative_week_column(df, date_col, year, week_start=0):
 
     return df
 
+def select_argmax_window3(hours):
+    if len(hours.shape) == 1:
+        hours_ = hours.copy()
+        hours_[:-1] += hours[1:]
+        hours_[1:] += hours[:-1]
+        return np.argmax(hours_)
+    elif len(hours.shape) == 2:
+        hours_ = hours.copy()
+        hours_[:, :-1] += hours[:, 1:]
+        hours_[:, 1:] += hours[:, :-1]
+        return np.argmax(hours_, axis=1)
+    else:
+        raise ValueError("Input `hours` has inappropriate dimension")
+    
+def calculate_loss(y_predict, y_truth, peak_days=None):
+    if peak_days == None: peak_days = np.array([0]*10) # Predict non-peak for all days
+    if (not isinstance(y_predict, np.array)) or (not isinstance(y_truth, np.array)):
+        raise ValueError('Inputs need to be of type numpy.array')
+    if (len(y_predict.shape) != (10, 24)) or (len(y_truth.shape) != (10, 24)):
+        raise ValueError('Inputs dimensions have to be (10, 24)')
+    argmax_predict = select_argmax_window3(y_predict)
+    argmax_truth = np.argmax(y_truth, axis=1)
+    day_maxes = np.max(y_truth, axis=1)
+    day_indices = np.argsort(day_maxes)
+    a, b = day_indices[-1], day_indices[-2]
+    print(f"Two max day: {a}, {b}")
+    lost1 = np.sum((y_predict-y_truth)**2/24/10)
+    lost2 = (np.abs(argmax_predict-argmax_truth) > 1.5).sum()
+    lost3 = 0
+    for i in range(10):
+        if i in [a, b] and peak_days[i] == 0: lost3 += 4
+        if not i in [a, b] and peak_days[i] == 1: lost3 += 1
+    return lost1, lost2, lost3
+    
+
 if __name__ == '__main__':
 
     # Example usage:
@@ -44,3 +92,15 @@ if __name__ == '__main__':
     # Example with Sunday as the start of the week (6)
     df_with_weeks = add_relative_week_column(df, "date", year=2024, week_start=6)
     print(df_with_weeks)
+
+    # Example if select_argmax_window3
+    print()
+    print("Argmax window selection test")
+    array1 = np.array([1, 1, 1, 1, 1, 1, 1, 1])
+    array2 = np.array([1, 2, 5, 3, 7, 6, 9, 3])
+    array3 = np.array([[1, 2, 5, 3, 7, 6, 9, 3],
+                       [4, 7, 6, 8, 2, 3, 4, 9],
+                       [8, 8, 8, 2, 9, 9, 3, 1]]) 
+    print(select_argmax_window3(array1))                                                                                                                                                                                 
+    print(select_argmax_window3(array2))
+    print(select_argmax_window3(array3))
