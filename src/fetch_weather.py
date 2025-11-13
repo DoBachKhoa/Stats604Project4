@@ -4,6 +4,7 @@ from tqdm import tqdm
 from datetime import datetime
 from meteostat import Point, Daily
 from meteostat import Stations
+from utils import add_relative_week_column
 from constants import WEATHER_FEATURES, ZONES, MONTH, LEAPS
 
 def fillna_by_month(df: pd.DataFrame, value_col: str = "value", date_col: str = "datetime"):
@@ -96,7 +97,6 @@ def fetch_weather_data(year=2024, start_month=9, end_month=11, weather_features=
         data = Daily(location, start, end)
         data = data.fetch()
         data = data[weather_features]
-        data['zone'] = zone
         data.reset_index(inplace=True, names='date')
 
         # Fill na
@@ -135,17 +135,22 @@ def save_weather_data(weather_features=WEATHER_FEATURES, zones=ZONES, fillna=Fal
     '''
     # Load zone coordinate data
     if df_coords is None: df_coords = pd.read_csv('data/zone_locations.csv')[['zone', 'lon', 'lat']]
-    output = {zone: pd.DataFrame(columns=weather_features+['date', 'zone']) for zone in zones}
-    starts_ends = [[2022, 8, 11], [2023, 8, 11], [2024, 8, 11], [2025, 8, 10]]
+    output = {zone: pd.DataFrame(columns=weather_features+['year', 'relative_week', 'day_of_week']) for zone in zones}
+    starts_ends = [[2022, 1, 12], [2023, 1, 12], [2024, 1, 12], [2025, 1, 10]]
 
     for year, start_month, end_month in starts_ends:
         output_year = fetch_weather_data(year=year, start_month=start_month, end_month=end_month, \
                                          weather_features=weather_features, zones=zones, fillna=fillna, df_coords=df_coords)
         for zone in zones:
-            output[zone] = pd.concat([output[zone], output_year[zone]], ignore_index=True)
+            data_year = output_year[zone]
+            data_year = add_relative_week_column(data_year, 'date', year, week_start=6)
+            data_year['year'] = data_year['date'].dt.year
+            data_year.drop('date', axis=1, inplace=True)
+            output[zone] = pd.concat([output[zone], data_year], ignore_index=True)
 
     for zone in zones:
         output[zone].to_csv(f'data/data_weather/weather_data_{zone}.csv')
+
 
 if __name__ == '__main__':
     df_coords = pd.read_csv('data/zone_locations.csv')[['zone', 'lon', 'lat']]
