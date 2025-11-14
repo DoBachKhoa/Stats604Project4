@@ -3,13 +3,13 @@ import pickle
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from data_loader import get_electric_data, get_weather_data, format_request
-from constants import ZONES, PRED_DAYS, PRED_WEEK_START, HOURS
-from utils import slide_week_day, select_argmax_window3, calculate_loss
+from src.data_loader import get_electric_data, get_weather_data, format_request
+from src.constants import ZONES, PRED_DAYS, PRED_WEEK_START, HOURS
+from src.utils import slide_week_day, select_argmax_window3, calculate_loss
 
-class ElectricPipeline:
+class ElectricTemplatePipeline:
     '''
-    Base Pipeline class for the
+    Base Template Pipeline class for the
     Predicting Electricity Load Around Thanksgiving task.
     Class method to be overloaded by child class:   
 
@@ -52,26 +52,34 @@ class ElectricPipeline:
             assert False, "No testing available for this year!"
         electric_data = get_electric_data(self.zone, \
                                           self._request_test_electric_data(), \
-                                          daystart=PRED_WEEK_START)
+                                          daystart=PRED_WEEK_START)[HOURS]
         weather_data = get_weather_data(self.zone, \
                                         self._request_test_weather_data(), \
                                         daystart=PRED_WEEK_START)
         day_predicts = format_request(self._request_test_electric_data())
         electric_predict = self.predict(week=day_predicts['relative_week'], \
                                         day=day_predicts['day_of_week'], \
-                                        year=day_predicts['day'], weather=weather_data)
+                                        year=day_predicts['year'], weather=weather_data)
         electric_data_np = np.array(electric_data)
         electric_predict_np = np.array(electric_predict)
-        peak_days = np.array([1, 1, 1, 1, 1, 1, 1, 1, 0, 0])
+        peak_days = np.array([1, 1, 1, 1, 1, 1, 1, 0, 0, 1])
         return calculate_loss(electric_predict_np, electric_data_np, peak_days)
 
     def predict(self, week, day, year=None, weather=None):
         raise NotImplementedError
     
+    def predict_dates(self, request): # In the work
+        weather_data = get_weather_data(self.zone, request, \
+                                        daystart=PRED_WEEK_START)
+        day_predicts = format_request(request)
+        return self.predict(week=day_predicts['week'], \
+                            day=day_predicts['day_of_week'], \
+                            year=day_predicts['year'])
+    
     def predict_final(self): # In the work
         return [self.predict(week, day) for day, week in PRED_DAYS]
     
-class ZeroPipeline(ElectricPipeline):
+class ZeroPipeline(ElectricTemplatePipeline):
     def __init__(self, zone='AECO', year=2024):
         super().__init__(zone, year)
         self.trained = True
@@ -88,10 +96,10 @@ class ZeroPipeline(ElectricPipeline):
     def train_model(self):
         pass
     
-    def predict(self, day, month, year=None, weather=None):
-        return np.array([0]*24)
+    def predict(self, week, day, year=None, weather=None):
+        return np.array([[0]*24 for _ in range(len(day))])
     
-class BaseMeanPipeline(ElectricPipeline):
+class BaseMeanPipeline(ElectricTemplatePipeline):
     def __init__(self, zone='AECO', year=2024, use_week=6):
         super().__init__(zone, year)
         self.use_week = use_week
@@ -119,14 +127,16 @@ class BaseMeanPipeline(ElectricPipeline):
                                           self._request_train_electric_data(), \
                                           daystart=PRED_WEEK_START)
         for day in range(7):
-            temp = electric_data[electric_data['week_day']==day].mean()
+            temp = electric_data[electric_data['day_of_week']==day].mean()
             self.model[day] = list(temp[[f"H{int(h):02d}" for h in range(24)]])
         self.trained = True
     
     def predict(self, week, day, year=None, weather=None):
-        return np.array(self.model[day])
+        if self.trained == False:
+            assert False, "Model not trained"
+        return np.array([self.model[d] for d in day])
 
-class RegressionPipeline(ElectricPipeline):
+class BasicRegressionPipeline(ElectricTemplatePipeline):
     def __init__(self, zone='AECO', year=2024, train_year=1):
         super().__init__(zone, year)
         self.train_year = train_year
@@ -164,13 +174,15 @@ class RegressionPipeline(ElectricPipeline):
         self.trained = True
 
     def predict(self, week, day, year=None, weather=None):
+        if self.trained == False:
+            assert False, "Model not trained"
         if year is None: year = self.year
-        x_pred = weather[['tmin', 'tmax', 'tavg', 'pres']]
+        x_pred = weather[['tmin', 'tmax', 'tavg', 'pres']].copy()
         x_pred['day_of_week'] = day
         if self.train_year > 1: x_pred['year'] = year
         return np.array(self.model.predict(x_pred))
 
-class AdditivePipeline(ElectricPipeline):
+class AdditivePipeline(ElectricTemplatePipeline):
     def __init__(self, zone='AECO', year=2024):
         super().__init__(zone, year)
 

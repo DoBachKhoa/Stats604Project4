@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from constants import THANKSGIVING
+from src.constants import THANKSGIVING
 
-def slide_week_day(week1, week2, day1, day2, daystart=0):
+def slide_week_day(week1, week2, day1=None, day2=None, daystart=0):
     if day1 == None: day1 = daystart
     if day2 == None: day2 = daystart
     output = [[day1, week1]]
@@ -63,18 +63,18 @@ def select_argmax_window3(hours):
         raise ValueError("Input `hours` has inappropriate dimension")
     
 def calculate_loss(y_predict, y_truth, peak_days=None):
-    if peak_days == None: peak_days = np.array([0]*10) # Predict non-peak for all days
-    if (not isinstance(y_predict, np.array)) or (not isinstance(y_truth, np.array)):
+    if peak_days is None: peak_days = np.array([0]*10) # Predict non-peak for all days
+    if (not isinstance(y_predict, np.ndarray)) or (not isinstance(y_truth, np.ndarray)):
         raise ValueError('Inputs need to be of type numpy.array')
-    if (len(y_predict.shape) != (10, 24)) or (len(y_truth.shape) != (10, 24)):
-        raise ValueError('Inputs dimensions have to be (10, 24)')
+    if (y_predict.shape != (10, 24)) or (y_truth.shape != (10, 24)):
+        raise ValueError(f'Got shape {y_predict.shape} and {y_truth.shape}, but have to be (10, 24)')
     argmax_predict = select_argmax_window3(y_predict)
     argmax_truth = np.argmax(y_truth, axis=1)
     day_maxes = np.max(y_truth, axis=1)
     day_indices = np.argsort(day_maxes)
     a, b = day_indices[-1], day_indices[-2]
     print(f"Two max day: {a}, {b}")
-    lost1 = np.sum((y_predict-y_truth)**2/24/10)
+    lost1 = np.sqrt(np.sum((y_predict-y_truth)**2/24/10))
     lost2 = (np.abs(argmax_predict-argmax_truth) > 1.5).sum()
     lost3 = 0
     for i in range(10):

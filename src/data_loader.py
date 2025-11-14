@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from constants import PRED_WEEK_START, WEATHER_FEATURES, HOURS
+from src.constants import PRED_WEEK_START, WEATHER_FEATURES, HOURS
 
 def format_request(request):
     request_days = pd.DataFrame(columns=['year', 'relative_week', 'day_of_week'])
