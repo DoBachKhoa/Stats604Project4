@@ -2,9 +2,10 @@ import json
 import pickle
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from src.data_loader import get_electric_data, get_weather_data, format_request
-from src.constants import ZONES, PRED_DAYS, PRED_WEEK_START, HOURS
+from src.constants import ZONES, PRED_DAYS, PRED_WEEK_START, HOURS, WEEKDAYS
 from src.utils import slide_week_day, select_argmax_window3, calculate_loss
 
 class ElectricTemplatePipeline:
@@ -14,8 +15,8 @@ class ElectricTemplatePipeline:
     Class method to be overloaded by child class:   
 
         _request_train_electric_data(self)
-        load_model(self, model_path=None)
-        save_model(self, model_path=None)
+        load_model(self, model_path)
+        save_model(self, model_path)
         train_model(self)
         predict(self, week, day, weather=None)
 
@@ -38,10 +39,10 @@ class ElectricTemplatePipeline:
     def _request_test_weather_data(self):
         return self._request_test_electric_data()
 
-    def load_model(self, model_path=None):
+    def load_model(self, model_path):
         raise NotImplementedError
     
-    def save_model(self, model_path=None):
+    def save_model(self, model_path):
         raise NotImplementedError
     
     def train_model(self):
@@ -68,13 +69,14 @@ class ElectricTemplatePipeline:
     def predict(self, week, day, year=None, weather=None):
         raise NotImplementedError
     
-    def predict_dates(self, request): # In the work
+    def predict_request(self, request): 
         weather_data = get_weather_data(self.zone, request, \
                                         daystart=PRED_WEEK_START)
         day_predicts = format_request(request)
-        return self.predict(week=day_predicts['week'], \
+        return self.predict(week=day_predicts['relative_week'], \
                             day=day_predicts['day_of_week'], \
-                            year=day_predicts['year'])
+                            year=day_predicts['year'], \
+                            weather=weather_data)
     
     def predict_final(self): # In the work
         return [self.predict(week, day) for day, week in PRED_DAYS]
@@ -87,10 +89,10 @@ class ZeroPipeline(ElectricTemplatePipeline):
     def _request_train_electric_data(self):
         return dict()
 
-    def save_model(self, model_path=None):
+    def save_model(self, model_path):
         pass
 
-    def load_model(self, model_path=None):
+    def load_model(self, model_path):
         pass
     
     def train_model(self):
@@ -100,24 +102,60 @@ class ZeroPipeline(ElectricTemplatePipeline):
         return np.array([[0]*24 for _ in range(len(day))])
     
 class BaseMeanPipeline(ElectricTemplatePipeline):
-    def __init__(self, zone='AECO', year=2024, use_week=6):
+    def __init__(self, zone='AECO', year=2024, use_week=8):
         super().__init__(zone, year)
         self.use_week = use_week
-        self.model = [0]*7
+        self.model = None
 
     def _request_train_electric_data(self):
-        return {self.year: slide_week_day(-4-self.use_week, -4, daystart=PRED_WEEK_START)}
+        return {self.year: slide_week_day(-2-self.use_week, -2, daystart=PRED_WEEK_START)}
     
     def _request_test_weather_data(self):
         return dict()
 
-    def save_model(self, model_path=None):
+    def save_model(self, model_path):
         if self.trained == False:
             assert False, "Model not trained"
         with open(model_path, 'w') as f:
             json.dump(self.model, f, indent=4) 
 
-    def load_model(self, model_path=None):
+    def load_model(self, model_path):
+        with open(model_path, 'r') as f:
+            self.model = json.load(f)
+        self.trained = True
+    
+    def train_model(self):
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_electric_data(), \
+                                          daystart=PRED_WEEK_START)
+        temp = electric_data.mean()
+        self.model = list(temp[[f"H{int(h):02d}" for h in range(24)]])
+        self.trained = True
+    
+    def predict(self, week, day, year=None, weather=None):
+        if self.trained == False:
+            assert False, "Model not trained"
+        return np.array([self.model for _ in day]).copy()
+    
+class BaseMeanByDayPipeline(ElectricTemplatePipeline):
+    def __init__(self, zone='AECO', year=2024, use_week=8):
+        super().__init__(zone, year)
+        self.use_week = use_week
+        self.model = [0]*7
+
+    def _request_train_electric_data(self):
+        return {self.year: slide_week_day(-2-self.use_week, -2, daystart=PRED_WEEK_START)}
+    
+    def _request_test_weather_data(self):
+        return dict()
+
+    def save_model(self, model_path):
+        if self.trained == False:
+            assert False, "Model not trained"
+        with open(model_path, 'w') as f:
+            json.dump(self.model, f, indent=4) 
+
+    def load_model(self, model_path):
         with open(model_path, 'r') as f:
             self.model = json.load(f)
         self.trained = True
@@ -140,18 +178,21 @@ class BasicRegressionPipeline(ElectricTemplatePipeline):
     def __init__(self, zone='AECO', year=2024, train_year=1):
         super().__init__(zone, year)
         self.train_year = train_year
+        self.train_year_list = None
         self.model = None
 
     def _request_train_electric_data(self):
-        return {i: slide_week_day(-10, -4, daystart=PRED_WEEK_START) \
-                for i in range(self.year, self.year-self.train_year, -1)}
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
 
-    def load_model(self, model_path=None):
+    def load_model(self, model_path):
         with open(model_path, 'rb') as file:
             self.model = pickle.load(file)
         self.trained = True
 
-    def save_model(self, model_path=None):
+    def save_model(self, model_path):
         if self.trained == False:
             assert False, "Model not trained"
         with open(model_path, 'wb') as file:
@@ -164,9 +205,13 @@ class BasicRegressionPipeline(ElectricTemplatePipeline):
         weather_data = get_weather_data(self.zone, \
                                         self._request_train_weather_data(), \
                                         daystart=PRED_WEEK_START)
-        features = ['tmin', 'tmax', 'tavg', 'pres', 'day_of_week']
-        if self.train_year > 1: features.append('year')
-        x_train = weather_data[features]
+        features = ['tmin', 'tmax', 'tavg', 'pres']
+        x_train = weather_data[features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_train[weekday] = (weather_data['day_of_week'] == i).astype(int)
+        self.train_year_list = list(weather_data['year'].unique())[:-1]
+        for year in self.train_year_list:
+            x_train[f'year{year}'] = (weather_data['year'] == year).astype(int)
         y_train = electric_data[HOURS]
         model = LinearRegression(fit_intercept=True)
         model.fit(x_train, y_train)
@@ -174,34 +219,110 @@ class BasicRegressionPipeline(ElectricTemplatePipeline):
         self.trained = True
 
     def predict(self, week, day, year=None, weather=None):
+        if weather is None:
+            assert False, 'Prediction needs weather data'
         if self.trained == False:
             assert False, "Model not trained"
         if year is None: year = self.year
         x_pred = weather[['tmin', 'tmax', 'tavg', 'pres']].copy()
-        x_pred['day_of_week'] = day
-        if self.train_year > 1: x_pred['year'] = year
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_pred[weekday] = (weather['day_of_week'] == i).astype(int)
+        for year in self.train_year_list:
+            x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
         return np.array(self.model.predict(x_pred))
-
-class AdditivePipeline(ElectricTemplatePipeline):
-    def __init__(self, zone='AECO', year=2024):
+    
+class PCARegressionPipeline(ElectricTemplatePipeline):
+    def __init__(self, zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=3):
         super().__init__(zone, year)
+        if train_year_pca == None: train_year_pca = train_year
+        self.train_year = train_year
+        self.train_year_list = None
+        self.train_year_pca = train_year_pca
+        self.trained_pca = False
+        self.model = None
+        self.pca = None
+        self.num_PC = num_PC
+    
+    def _request_train_pca_data(self):
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year_pca, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
 
-    def _request_train_electric_data(self): # In the work
-        pass
+    def _request_train_electric_data(self):
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
 
-    def load_model(self, model_path=None): # In the work
-        pass
+    def load_model(self, model_path, pca_path):
+        with open(model_path, 'rb') as file:
+            self.model = pickle.load(file)
+        with open(pca_path, 'rb') as file:
+            self.pca = pickle.load(file)
         self.trained = True
+        self.trained_pca = True
 
-    def save_model(self, model_path=None): # In the work
+    def save_model(self, model_path, pca_path):
         if self.trained == False:
             assert False, "Model not trained"
-        pass
+        if self.trained_pca == False:
+            assert False, "PCA decompt not trained"
+        with open(model_path, 'wb') as file:
+            pickle.dump(self.model, file)
+        with open(pca_path, 'wb') as file:
+            pickle.dump(self.pca, file)
 
-    def train_model(self): # In the work
-        pass
+    def train_pca(self):
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_pca_data(), \
+                                          daystart=PRED_WEEK_START)
+        pca = PCA()
+        pca.fit(np.array(electric_data[HOURS]))
+        self.pca = pca
+        self.trained_pca = True
+        
+    def train_model(self):
+        # Prepare pca & load data
+        if not self.trained_pca: self.train_pca()
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_electric_data(), \
+                                          daystart=PRED_WEEK_START)
+        weather_data = get_weather_data(self.zone, \
+                                        self._request_train_weather_data(), \
+                                        daystart=PRED_WEEK_START)
+        features = ['tmin', 'tmax', 'tavg', 'pres']
+
+        # Prepare x
+        x_train = weather_data[features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_train[weekday] = (weather_data['day_of_week'] == i).astype(int)
+        self.train_year_list = list(weather_data['year'].unique())[:-1]
+        for year in self.train_year_list:
+            x_train[f'year{year}'] = (weather_data['year'] == year).astype(int)
+
+        # Prepare y
+        electric_data_np = np.array(electric_data[HOURS])
+        electric_data_proj = self.pca.transform(electric_data_np)[:, :self.num_PC]
+        column_names = [f'PC{i+1}' for i in range(self.num_PC)]
+        y_train = pd.DataFrame(data=electric_data_proj, columns=column_names)
+
+        # Fit model
+        model = LinearRegression(fit_intercept=True)
+        model.fit(x_train, y_train)
+        self.model = model
         self.trained = True
 
-    def predict(self, week, day, year=None, weather=None): # In the work
+    def predict(self, week, day, year=None, weather=None):
+        if weather is None:
+            assert False, 'Prediction needs weather data'
+        if self.trained == False:
+            assert False, "Model not trained"
         if year is None: year = self.year
-        pass
+        x_pred = weather[['tmin', 'tmax', 'tavg', 'pres']].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_pred[weekday] = (weather['day_of_week'] == i).astype(int)
+        for year in self.train_year_list:
+            x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
+        y_pred = np.array(self.model.predict(x_pred))
+        return y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_

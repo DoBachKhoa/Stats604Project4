@@ -3,6 +3,5 @@ scipy
 pandas
 sklearn
 matplotlib
-notebook
 meteostat
 jupytext

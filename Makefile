@@ -14,7 +14,7 @@ $(VENV_DIR) : requirements.txt # check requirement changes
 	@touch $(VENV_DIR)
 
 predictions : $(VENV_DIR)
-	@$(VENV_PY) src/dummy.py
+	@$(VENV_PY) -m src/dummy.py
 
 venv : $(VENV_DIR)
 
