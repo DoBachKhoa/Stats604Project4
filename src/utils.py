@@ -73,14 +73,15 @@ def calculate_loss(y_predict, y_truth, peak_days=None):
     day_maxes = np.max(y_truth, axis=1)
     day_indices = np.argsort(day_maxes)
     a, b = day_indices[-1], day_indices[-2]
-    print(f"Two max day: {a}, {b}")
     lost1 = np.sqrt(np.sum((y_predict-y_truth)**2/24/10))
     lost2 = (np.abs(argmax_predict-argmax_truth) > 1.5).sum()
     lost3 = 0
     for i in range(10):
         if i in [a, b] and peak_days[i] == 0: lost3 += 4
         if not i in [a, b] and peak_days[i] == 1: lost3 += 1
-    return lost1, lost2, lost3
+    lost_ratios = list(np.sum((y_predict-y_truth)**2/24/10, axis=1)/np.sum((y_predict-y_truth)**2/24/10))
+    output = {'lost1': lost1, 'lost2': lost2, 'lost3': lost3, '1stHigh': a, '2ndHigh': b, 'lost_ratios': lost_ratios}
+    return output
     
 
 if __name__ == '__main__':

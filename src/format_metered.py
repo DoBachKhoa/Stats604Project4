@@ -104,4 +104,4 @@ def load_metered_data_multiple_years(years, week_start=PRED_WEEK_START):
 
 
 if __name__ == '__main__':
-    load_metered_data_multiple_years(list(range(2022, 2026)))
+    load_metered_data_multiple_years(list(range(2018, 2026)))

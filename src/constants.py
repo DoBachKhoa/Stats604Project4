@@ -1,4 +1,5 @@
 WEATHER_FEATURES = ['tavg', 'tmin', 'tmax', 'prcp', 'snow', 'wspd', 'pres']
+WEATHER_FEATURES_HOURLY = ['temp', 'dwpt', 'rhum', 'prcp', 'wspd', 'pres']
 ZONES = ['AECO', 'AEPAPT', 'AEPIMP', 'AEPKPT', 'AEPOPT', 'AP', 'BC', 'CE', \
          'DAY', 'DEOK', 'DOM', 'DPLCO', 'DUQ', 'EASTON', 'EKPC', 'JC', 'ME', \
          'OE', 'OVEC', 'PAPWR', 'PE', 'PEPCO', 'PLCO', 'PN', 'PS', 'RECO', \
@@ -11,3 +12,5 @@ DAYLIGHT_START = {2016:'13', 2017:'12', 2018:'11', 2019:'10', 2020:'08', 2021:'1
 DAYLIGHT_END = {2016:'06', 2017:'05', 2018:'04', 2019:'03', 2020:'01', 2021:'07', 2022:'06', 2023:'05', 2024:'03', 2025:'02'}
 PRED_DAYS = [[3, -1], [4, -1], [5, -1], [6, 0], [0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]]
 PRED_WEEK_START = 6
+WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+WEEKDAYS_DICT = {'mon':0, 'tue':1, 'wed':2, 'thu':3, 'fri':4, 'sat':5, 'sun':6}
