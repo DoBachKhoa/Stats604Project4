@@ -1,6 +1,19 @@
+'''
+Define the helper data loader functions 
+for the pipelines' convenicence of loading the needed data
+E.g.1: 
+    request = {2024: [[3, 0], [4, 0], [5, 0]]} # Weeks 0 means thanksgiving week,
+                                               # Days 3, 4, 5 means thu, fri, sat
+    electric_data = get_electric_data(request) # Returns pd.df of electric data in requested dates
+
+E.g.2: 
+    request = {2023: utils.slide_week_day(-1, 1)} # Request all days in the week -1 and 0
+                                                  # which are the week before and thanksgiving week
+    weather_data = get_weather_data(request)      # Returns pd.df of weather data in requested dates
+'''
 import numpy as np
 import pandas as pd
-from src.constants import PRED_WEEK_START, WEATHER_FEATURES, HOURS
+from src.constants import PRED_WEEK_START
 
 def format_request(request):
     request_days = pd.DataFrame(columns=['year', 'relative_week', 'day_of_week'])

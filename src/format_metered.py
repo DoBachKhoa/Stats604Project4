@@ -1,3 +1,12 @@
+'''
+Format and store metered data
+For each zone, data are store as a csv file
+where the rows are the dates (across years - we take from 2022 to now)
+and the columns are the 24 hours, the relative week (compared to thanks giving week),
+and the relative day of week (0 for monday to 6 for saturday).
+We set a week to begin with saturday (meaning 6, 0, 1, 2, 3, 4, 5), due to
+saturday being the last prediction day.
+'''
 import numpy as np
 import pandas as pd
 from tqdm import tqdm

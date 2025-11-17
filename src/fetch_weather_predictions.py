@@ -1,4 +1,8 @@
-import os
+'''
+File to load new prediction data for future load predictions.
+the function `hourly_open_meteo` loads hourly data and saves only the principal components.
+the function `daily_open_meteo` loads daily data # Not implemented
+'''
 import numpy as np
 import pandas as pd
 import requests
@@ -7,12 +11,9 @@ from tqdm import tqdm
 from sklearn.decomposition import PCA
 from datetime import date as Date
 from datetime import datetime
-from meteostat import Point, Daily, Hourly
 from meteostat import Stations
-from src.fetch_weather import fillna_by_month
 from src.utils import add_relative_week_column
-from src.constants import WEATHER_FEATURES, ZONES, MONTH, LEAPS, PRED_WEEK_START, \
-                          WEATHER_FEATURES_HOURLY, WEATHER_FEATURES_HOURLY_COUNTS, HOURS
+from src.constants import PRED_WEEK_START, WEATHER_FEATURES_HOURLY, WEATHER_FEATURES_HOURLY_COUNTS
 
 def hourly_open_meteo(zone, counts, date=None):
     """
@@ -68,6 +69,7 @@ def hourly_open_meteo(zone, counts, date=None):
     output = add_relative_week_column(output, 'date', date.year, week_start=PRED_WEEK_START)
     return output
 
-# Example:
-hours = hourly_open_meteo('AECO', WEATHER_FEATURES_HOURLY_COUNTS)
-print(hours)
+if __name__ == '__main__':
+    # Example:
+    hours = hourly_open_meteo('AECO', WEATHER_FEATURES_HOURLY_COUNTS)
+    print(hours)

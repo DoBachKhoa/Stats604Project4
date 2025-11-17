@@ -1,3 +1,16 @@
+'''
+Format and store hourly weather data
+Set weather features of each day as the PCs of the hourly weather features
+e.g.: temp_PC0, temp_PC1, prcp_PC0, prcp_PC1 ...
+the `count` variables specify how many PCs to save per weather features
+(usually 1 to 2, except 4 for `prcp`).
+For each zone, data are store as a csv file
+where the rows are the dates (across years - we take from 2022 to now)
+and the columns are the weather features' PCs, the relative week (compared to thanks giving week),
+and the relative day of week (0 for monday to 6 for saturday).
+We set a week to begin with saturday (meaning 6, 0, 1, 2, 3, 4, 5), due to
+saturday being the last prediction day.
+'''
 import os
 import json
 import pickle
@@ -21,7 +34,7 @@ def format_weather_hourly_pca(features, counts, zones=ZONES):
         data = None
         adding_columns = dict()
         for _, (feature, count) in enumerate(zip(features, counts)):
-            directory = f'data/data_weather_hourly/{feature}/weather_{zone}.csv'
+            directory = f'data/data_weather_hourly_raw/{feature}/weather_{zone}.csv'
             data_temp = pd.read_csv(directory)
             if data is None: data = data_temp[['year', 'relative_week', 'day_of_week']].copy()
             data_temp = np.array(data_temp[HOURS])

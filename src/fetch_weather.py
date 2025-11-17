@@ -1,3 +1,12 @@
+'''
+Fetch and format daily weather data
+For each zone, data are store as a csv file
+where the rows are the dates (across years - we take from 2022 to now)
+and the columns are the weather features, the relative week (compared to thanks giving week),
+and the relative day of week (0 for monday to 6 for saturday).
+We set a week to begin with saturday (meaning 6, 0, 1, 2, 3, 4, 5), due to
+saturday being the last prediction day.
+'''
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -149,7 +158,7 @@ def save_weather_data(weather_features=WEATHER_FEATURES, zones=ZONES, fillna=Fal
             output[zone] = pd.concat([output[zone], data_year], ignore_index=True)
 
     for zone in zones:
-        output[zone].to_csv(f'data/data_weather/weather_data_{zone}.csv')
+        output[zone].to_csv(f'data/data_weather_daily/weather_data_{zone}.csv')
 
 
 if __name__ == '__main__':

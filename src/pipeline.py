@@ -1,3 +1,12 @@
+'''
+Define the load prediction pipelines.
+Each pipeline has a model and the functionalities
+to get data, train model, save and load model, test itself in the case of previous years,
+and give model prediction.
+Each pipeline is basically an algorithm (algo = model + hyperparams).
+(hyperparams are sometime input-able in pipeline. We also don't have a lot of them.)
+The last ones (named and are most complicated) are the final models used for prediction
+'''
 import json
 import pickle
 import numpy as np
@@ -6,7 +15,7 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from src.data_loader import get_electric_data, get_weather_data, get_weather_data_hourly, format_request
 from src.constants import ZONES, PRED_DAYS, PRED_WEEK_START, HOURS, WEEKDAYS
-from src.utils import slide_week_day, select_argmax_window3, calculate_loss, to_string
+from src.utils import slide_week_day, calculate_loss, to_string
 
 class ElectricTemplatePipeline:
     '''
@@ -82,6 +91,10 @@ class ElectricTemplatePipeline:
         return [self.predict(week, day) for day, week in PRED_DAYS]
     
 class ZeroPipeline(ElectricTemplatePipeline):
+    '''
+    Simple pipeline that just output a bunch of zeros.
+    Nothing to see here.
+    '''
     def __init__(self, zone='AECO', year=2024):
         super().__init__(zone, year)
         self.trained = True
@@ -102,6 +115,10 @@ class ZeroPipeline(ElectricTemplatePipeline):
         return np.array([[0]*24 for _ in range(len(day))])
     
 class BaseMeanPipeline(ElectricTemplatePipeline):
+    '''
+    Simple pipeline that uses the mean of the previous weeks to predict.
+    Very little to see here.
+    '''
     def __init__(self, zone='AECO', year=2024, use_week=8):
         super().__init__(zone, year)
         self.use_week = use_week
@@ -138,6 +155,11 @@ class BaseMeanPipeline(ElectricTemplatePipeline):
         return np.array([self.model for _ in day]).copy()
     
 class BaseMeanByDayPipeline(ElectricTemplatePipeline):
+    '''
+    Simple pipeline that uses the mean of the previous weeks to predict.
+    Uses the mean of previous mondays to predict monday, etc.
+    Little to see here.
+    '''
     def __init__(self, zone='AECO', year=2024, use_week=8):
         super().__init__(zone, year)
         self.use_week = use_week
@@ -175,6 +197,11 @@ class BaseMeanByDayPipeline(ElectricTemplatePipeline):
         return np.array([self.model[d] for d in day])
 
 class BasicRegressionPipeline(ElectricTemplatePipeline):
+    '''
+    Linear Regression Pipleline that predicts the next day based on weather of that day
+    and which day it is in the week.
+    First proper and non-trivial baseline model.
+    '''
     def __init__(self, zone='AECO', year=2024, train_year=1):
         super().__init__(zone, year)
         self.train_year = train_year
@@ -232,6 +259,12 @@ class BasicRegressionPipeline(ElectricTemplatePipeline):
         return np.array(self.model.predict(x_pred))
     
 class PCARegressionPipeline(ElectricTemplatePipeline):
+    '''
+    Linear Regression Pipleline that predicts the next day based on weather of that day
+    and which day it is in the week.
+    Learns a PCA encoding of the daily load, so output some (e.g., 3) PCs instead of 24 hours
+    Intuitively: less prone to overfitting, more interpretable, much smaller in size.
+    '''
     def __init__(self, zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=3):
         super().__init__(zone, year)
         if train_year_pca == None: train_year_pca = train_year
@@ -332,6 +365,15 @@ class PCARegressionPipeline(ElectricTemplatePipeline):
         return y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_
     
 class PCAWeatherRegressionPipeline(ElectricTemplatePipeline):
+    '''
+    Linear Regression Pipleline that predicts the next day based on weather of that day
+    and which day it is in the week.
+    Learns a PCA encoding of the daily load, so output some (e.g., 3) PCs instead of 24 hours
+    Instead of taking weather feature (e.g., max temp, min temp, avg temp) as input, take in 
+    PCs of them (e.g., temp_PC0, temp_PC1, ...) as input.
+    Intuitively: gets more out of weather data, more interpretable.
+    Candidate model for prediction.
+    '''
     def __init__(self, zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=3, \
                  pca_input_dir = 'data/data_weather_hourly_processed'):
         super().__init__(zone, year)
@@ -477,9 +519,19 @@ class PCAWeatherRegressionPipeline(ElectricTemplatePipeline):
                             year=day_predicts['year'], \
                             weather=weather_data)
     
-class Ampere1(ElectricTemplatePipeline):
+class Faraday(ElectricTemplatePipeline):
     '''
-    Main prediction pipeline
+    First model accounting for holiday effects
+    Linear Regression Pipleline that predicts the next day based on weather of that day
+    and which day it is in the week.
+    Learns a PCA encoding of the daily load, so output some (e.g., 3) PCs instead of 24 hours
+    Instead of taking weather feature (e.g., max temp, min temp, avg temp) as input, take in 
+    PCs of them (e.g., temp_PC0, temp_PC1, ...) as input.
+    Add a 1-0 input covariates to signal and correct for thu, fri and sat of the two weeks (observed hard to learn)
+    Intuitively: accout for holiday effects in the (observabled from past years) affected dates.
+    Draw backs: weak correction.
+    Observed (mainly in 2024) that these days are hard to learn.
+    What if the weather was hard to learn, not the holiday effect?
     '''
     def __init__(self, zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=5, \
                  pca_input_dir = 'data/data_weather_hourly_processed'):
@@ -634,9 +686,20 @@ class Ampere1(ElectricTemplatePipeline):
                             year=day_predicts['year'], \
                             weather=weather_data)
     
-class Ampere2(PCAWeatherRegressionPipeline):
+class Edison(PCAWeatherRegressionPipeline):
     '''
-    Main prediction pipeline - version using cross-zone information
+    Linear Regression Pipleline that predicts the next day based on weather of that day
+    and which day it is in the week.
+    Learns a PCA encoding of the daily load, so output some (e.g., 3) PCs instead of 24 hours
+    Instead of taking weather feature (e.g., max temp, min temp, avg temp) as input, take in 
+    PCs of them (e.g., temp_PC0, temp_PC1, ...) as input.
+    Learns a correction model that corrects for thu, fri and sat of the two weeks (observed hard to learn).
+    One model thats corrects for these 6 days. Takes the predicted PCs and output corrected PCs
+    Intuitively: accout for holiday effects in the (observabled from past years) affected dates.
+    Correction model uses cross-zone data: Use more data.
+    Draw backs: observed (mainly in 2024) that these days are hard to learn. Hardcoded to correct for those 6 days.
+    What if the weather was hard to learn, not the holiday effect?
+    Correction model is a linear model and corrects for all 6 supposedly-hard-to-learn days: may give weak correction.
     '''
     def __init__(self, param_dir, \
                  zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=5, \
@@ -715,9 +778,22 @@ class Ampere2(PCAWeatherRegressionPipeline):
             y_pred[day_mask != -1] = self.correction_model.predict(y_adjust)
         return (y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_) * np.sqrt(self.metered_variance)
 
-class Ampere3(PCAWeatherRegressionPipeline):
+class Ampere(PCAWeatherRegressionPipeline):
     '''
-    Main prediction pipeline - version using cross-zone information
+    Linear Regression Pipleline that predicts the next day based on weather of that day
+    and which day it is in the week.
+    Learns a PCA encoding of the daily load, so output some (e.g., 3) PCs instead of 24 hours
+    Instead of taking weather feature (e.g., max temp, min temp, avg temp) as input, take in 
+    PCs of them (e.g., temp_PC0, temp_PC1, ...) as input.
+    Exclude data from thankgiving weeks and week before that of all years in training. Instead:
+    Learns a correction model that corrects for all 10 prediction days (hence 10 linear correction models)
+    Encoorperate cross-zone data
+    Intuitively: great idea!
+    Draw backs: Little data (only 58 per day if use 2 years, 87 if use 3 years, to fit a
+    (num_PC+1)*(num_PC) linear model). Lots of correction (10 pretrained models). Thus, may have a lot of variance.
+    Default: num_PC = 5.
+    Selected model for prediction. In his time, Andre-Marie Ampere was a professor at Ecole Polytechnique,
+    which was the school I went to for my Bachelor degree.
     '''
     def __init__(self, param_dir, correction_days, \
                  zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=5, \
@@ -739,7 +815,7 @@ class Ampere3(PCAWeatherRegressionPipeline):
         self.load_pca(f'{param_dir}/pca_global.pkl')
 
     def _request_train_electric_data(self):
-        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
+        output = {i: slide_week_day(-10, -4, daystart=PRED_WEEK_START) \
                   for i in range(self.year, self.year-self.train_year_pca, -1)}
         return output
 
@@ -793,5 +869,3 @@ class Ampere3(PCAWeatherRegressionPipeline):
                     y_pred_masked = y_pred[day_mask != 0].copy()
                     y_pred[day_mask != 0] = self.correction_models[(d, w)].predict(y_pred_masked)
         return (y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_) * np.sqrt(self.metered_variance)
-
-    

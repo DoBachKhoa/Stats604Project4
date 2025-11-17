@@ -1,16 +1,19 @@
+'''
+Train and save correction models
+to be used by pipelines such as Edison and Ampere in src.pipeline
+'''
 import os
 import json
 import pickle
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from src.pipeline import PCAWeatherRegressionPipeline
-from src.data_loader import get_electric_data, get_weather_data_hourly, format_request
-from src.utils import slide_week_day, calculate_loss, to_string
-from src.constants import HOURS, PRED_WEEK_START, WEATHER_FEATURES, ZONES, WEEKDAYS
+from src.data_loader import get_electric_data, get_weather_data_hourly
+from src.utils import slide_week_day, to_string
+from src.constants import HOURS, PRED_WEEK_START, ZONES, WEEKDAYS
 
 def generate_pca_metered(request, param_path):
 
@@ -204,11 +207,26 @@ def train_correction_model_by_day(param_path, year=2024, train_year=3, num_PC=5,
             pickle.dump(model, file)
 
 if __name__ == '__main__':
+
+    # Make correction model for data before 2024 thanksgiving, for testing purposes
+    print("Train a pca encoding for data prior to 2024 thanksgiving")
     request = {year: slide_week_day(-10, 3, daystart=PRED_WEEK_START) for year in [2022, 2023, 2024]}
-    param_path = 'params/global_param_2024'
+    param_path = 'pca_params/global_params_2024'
     os.makedirs(param_path, exist_ok=True)
     generate_pca_metered(request=request, param_path=param_path)
     train_correction_model(param_path, year=2024, train_year=3, num_PC=5, 
                            pca_input_dir = 'data/data_weather_hourly_processed')
     train_correction_model_by_day(param_path, year=2024, train_year=3, num_PC=5, days=slide_week_day(-1, 1),
+                                  pca_input_dir = 'data/data_weather_hourly_processed')
+    
+    # Make correction model for data in year 2025
+    print("Train a pca encoding for data prior to 2025 thanksgiving")
+    request = {year: slide_week_day(-10, 3, daystart=PRED_WEEK_START) for year in [2022, 2023, 2024]}
+    request[2025] = slide_week_day(-10, -4, daystart=PRED_WEEK_START)
+    param_path = 'pca_params/global_params_2025'
+    os.makedirs(param_path, exist_ok=True)
+    generate_pca_metered(request=request, param_path=param_path)
+    train_correction_model(param_path, year=2025, train_year=4, num_PC=5, 
+                           pca_input_dir = 'data/data_weather_hourly_processed')
+    train_correction_model_by_day(param_path, year=2025, train_year=4, num_PC=5, days=slide_week_day(-1, 1),
                                   pca_input_dir = 'data/data_weather_hourly_processed')

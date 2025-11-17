@@ -1,13 +1,23 @@
+'''
+File to load and store hourly feature data.
+For each zone and each feature (such as temerature),
+data are store as a csv file
+where the rows are the dates (across years - we take from 2022 to now)
+and the columns are the 24 hours, the relative week (compared to thanks giving week),
+and the relative day of week (0 for monday to 6 for saturday).
+We set a week to begin with saturday (meaning 6, 0, 1, 2, 3, 4, 5), due to
+saturday being the last prediction day.
+'''
 import os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
-from meteostat import Point, Daily, Hourly
+from meteostat import Point, Hourly
 from meteostat import Stations
 from src.fetch_weather import fillna_by_month
 from src.utils import add_relative_week_column
-from src.constants import WEATHER_FEATURES, ZONES, MONTH, LEAPS, PRED_WEEK_START, WEATHER_FEATURES_HOURLY, HOURS
+from src.constants import ZONES, PRED_WEEK_START, WEATHER_FEATURES_HOURLY, HOURS
 
 def fetch_weather_hourly_feature(year, zone, feature='temp', fillna=False, df_coords=None, week_start=PRED_WEEK_START):
     # Load zone coordinate data
@@ -58,7 +68,7 @@ def fetch_weather_hourly_feature(year, zone, feature='temp', fillna=False, df_co
 def load_weather_hourly(years=[2022, 2023, 2024, 2025], zones=ZONES, features=WEATHER_FEATURES_HOURLY, \
                         fillna=False, df_coords=None, week_start=PRED_WEEK_START):
     for feature in tqdm(features):
-        directory = f'data/data_weather_hourly/{feature}'
+        directory = f'data/data_weather_hourly_raw/{feature}'
         os.makedirs(directory, exist_ok=True)
         for zone in zones:
             data_all = None
