@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
-from src.data_loader import get_electric_data, get_weather_data, format_request
+from src.data_loader import get_electric_data, get_weather_data, get_weather_data_hourly, format_request
 from src.constants import ZONES, PRED_DAYS, PRED_WEEK_START, HOURS, WEEKDAYS
-from src.utils import slide_week_day, select_argmax_window3, calculate_loss
+from src.utils import slide_week_day, select_argmax_window3, calculate_loss, to_string
 
 class ElectricTemplatePipeline:
     '''
@@ -254,24 +254,28 @@ class PCARegressionPipeline(ElectricTemplatePipeline):
                   for i in range(self.year-1, self.year-self.train_year, -1)}
         output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
         return output
-
-    def load_model(self, model_path, pca_path):
-        with open(model_path, 'rb') as file:
-            self.model = pickle.load(file)
+    
+    def load_pca(self, pca_path):
         with open(pca_path, 'rb') as file:
             self.pca = pickle.load(file)
-        self.trained = True
         self.trained_pca = True
 
-    def save_model(self, model_path, pca_path):
-        if self.trained == False:
-            assert False, "Model not trained"
+    def load_model(self, model_path):
+        with open(model_path, 'rb') as file:
+            self.model = pickle.load(file)
+        self.trained = True
+
+    def save_pca(self, pca_path):
         if self.trained_pca == False:
             assert False, "PCA decompt not trained"
+        with open(pca_path, 'wb') as file:
+            pickle.dump(self.pca, file)    
+
+    def save_model(self, model_path):
+        if self.trained == False:
+            assert False, "Model not trained"
         with open(model_path, 'wb') as file:
             pickle.dump(self.model, file)
-        with open(pca_path, 'wb') as file:
-            pickle.dump(self.pca, file)
 
     def train_pca(self):
         electric_data = get_electric_data(self.zone, \
@@ -326,3 +330,468 @@ class PCARegressionPipeline(ElectricTemplatePipeline):
             x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
         y_pred = np.array(self.model.predict(x_pred))
         return y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_
+    
+class PCAWeatherRegressionPipeline(ElectricTemplatePipeline):
+    def __init__(self, zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=3, \
+                 pca_input_dir = 'data/data_weather_hourly_processed'):
+        super().__init__(zone, year)
+        if train_year_pca == None: train_year_pca = train_year
+        self.train_year = train_year
+        self.train_year_list = None
+        self.train_year_pca = train_year_pca
+        self.trained_pca = False
+        self.model = None
+        self.pca = None
+        self.num_PC = num_PC
+        self.pca_input_dir = pca_input_dir
+        self.pca_inputs = dict()
+        self.input_features = []
+        self._load_weather_pca()
+        self._create_input_features()
+
+    def _load_weather_pca(self):
+        with open(f'{self.pca_input_dir}/counts.json', 'r') as f:
+            self.counts = json.load(f)
+        self.pca_inputs = dict()
+        for feature in self.counts.keys():
+            with open(f'{self.pca_input_dir}/pcas/{self.zone}_{feature}.pkl', 'rb') as f:
+                self.pca_inputs[feature] = pickle.load(f)
+
+    def _create_input_features(self):
+        self.input_features = []
+        for key, value in self.counts.items():
+            for i in range(value):
+                self.input_features.append(f'{key}_PC{i}')
+    
+    def _request_train_pca_data(self):
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year_pca, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
+
+    def _request_train_electric_data(self):
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
+    
+    def load_pca(self, pca_path):
+        with open(pca_path, 'rb') as file:
+            self.pca = pickle.load(file)
+        self.trained_pca = True
+
+    def load_model(self, model_path):
+        with open(model_path, 'rb') as file:
+            self.model = pickle.load(file)
+        self.trained = True
+
+    def save_pca(self, pca_path):
+        if self.trained_pca == False:
+            assert False, "PCA decompt not trained"
+        with open(pca_path, 'wb') as file:
+            pickle.dump(self.pca, file)    
+
+    def save_model(self, model_path):
+        if self.trained == False:
+            assert False, "Model not trained"
+        with open(model_path, 'wb') as file:
+            pickle.dump(self.model, file)
+
+    def train_pca(self):
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_pca_data(), \
+                                          daystart=PRED_WEEK_START)
+        pca = PCA()
+        pca.fit(np.array(electric_data[HOURS]))
+        self.pca = pca
+        self.trained_pca = True
+        
+    def train_model(self):
+        # Prepare pca & load data
+        if not self.trained_pca: self.train_pca()
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_electric_data(), \
+                                          daystart=PRED_WEEK_START)
+        weather_data = get_weather_data_hourly(self.zone, \
+                                               self._request_train_weather_data(), \
+                                               daystart=PRED_WEEK_START, data_dir=self.pca_input_dir)
+
+        # Prepare x
+        x_train = weather_data[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_train[weekday] = (weather_data['day_of_week'] == i).astype(int)
+        self.train_year_list = list(weather_data['year'].unique())[:-1]
+        for year in self.train_year_list:
+            x_train[f'year{year}'] = (weather_data['year'] == year).astype(int)
+
+        # Prepare y
+        electric_data_np = np.array(electric_data[HOURS])
+        electric_data_proj = self.pca.transform(electric_data_np)[:, :self.num_PC]
+        column_names = [f'PC{i+1}' for i in range(self.num_PC)]
+        y_train = pd.DataFrame(data=electric_data_proj, columns=column_names)
+
+        # Fit model
+        model = LinearRegression(fit_intercept=True)
+        model.fit(x_train, y_train)
+        self.model = model
+        self.trained = True
+
+    def predict(self, week, day, year=None, weather=None):
+        if weather is None:
+            assert False, 'Prediction needs weather data'
+        if self.trained == False:
+            assert False, "Model not trained"
+        if year is None: year = self.year
+        x_pred = weather[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_pred[weekday] = (weather['day_of_week'] == i).astype(int)
+        for year in self.train_year_list:
+            x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
+        y_pred = np.array(self.model.predict(x_pred))
+        return y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_
+    
+    def test_model(self):
+        if self.year == 2025:
+            assert False, "No testing available for this year!"
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_test_electric_data(), \
+                                          daystart=PRED_WEEK_START)[HOURS]
+        weather_data = get_weather_data_hourly(self.zone, \
+                                               self._request_test_weather_data(), \
+                                               daystart=PRED_WEEK_START, data_dir=self.pca_input_dir)
+        day_predicts = format_request(self._request_test_electric_data())
+        electric_predict = self.predict(week=day_predicts['relative_week'], \
+                                        day=day_predicts['day_of_week'], \
+                                        year=day_predicts['year'], weather=weather_data)
+        electric_data_np = np.array(electric_data)
+        electric_predict_np = np.array(electric_predict)
+        peak_days = np.array([1, 1, 0, 0, 1, 1, 1, 0, 0, 1])
+        return calculate_loss(electric_predict_np, electric_data_np, peak_days)
+    
+    def predict_request(self, request): 
+        weather_data = get_weather_data_hourly(self.zone, request, daystart=PRED_WEEK_START, \
+                                               data_dir=self.pca_input_dir)
+        day_predicts = format_request(request)
+        return self.predict(week=day_predicts['relative_week'], \
+                            day=day_predicts['day_of_week'], \
+                            year=day_predicts['year'], \
+                            weather=weather_data)
+    
+class Ampere1(ElectricTemplatePipeline):
+    '''
+    Main prediction pipeline
+    '''
+    def __init__(self, zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=5, \
+                 pca_input_dir = 'data/data_weather_hourly_processed'):
+        super().__init__(zone, year)
+        if train_year_pca == None: train_year_pca = train_year
+        self.train_year = train_year
+        self.train_year_list = None
+        self.train_year_pca = train_year_pca
+        self.trained_pca = False
+        self.model = None
+        self.pca = None
+        self.num_PC = num_PC
+        self.pca_input_dir = pca_input_dir
+        self.pca_inputs = dict()
+        self.input_features = []
+        self._load_weather_pca()
+        self._create_input_features()
+
+    def _load_weather_pca(self):
+        with open(f'{self.pca_input_dir}/counts.json', 'r') as f:
+            self.counts = json.load(f)
+        self.pca_inputs = dict()
+        for feature in self.counts.keys():
+            with open(f'{self.pca_input_dir}/pcas/{self.zone}_{feature}.pkl', 'rb') as f:
+                self.pca_inputs[feature] = pickle.load(f)
+
+    def _create_input_features(self):
+        self.input_features = []
+        for key, value in self.counts.items():
+            for i in range(value):
+                self.input_features.append(f'{key}_PC{i}')
+    
+    def _request_train_pca_data(self):
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year_pca, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
+
+    def _request_train_electric_data(self):
+        output = {i: slide_week_day(-10, 3, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year, -1)}
+        output[self.year] = slide_week_day(-10, -2, daystart=PRED_WEEK_START)
+        return output
+    
+    def load_pca(self, pca_path):
+        with open(pca_path, 'rb') as file:
+            self.pca = pickle.load(file)
+        self.trained_pca = True
+
+    def load_model(self, model_path):
+        with open(model_path, 'rb') as file:
+            self.model = pickle.load(file)
+        self.trained = True
+
+    def save_pca(self, pca_path):
+        if self.trained_pca == False:
+            assert False, "PCA decompt not trained"
+        with open(pca_path, 'wb') as file:
+            pickle.dump(self.pca, file)    
+
+    def save_model(self, model_path):
+        if self.trained == False:
+            assert False, "Model not trained"
+        with open(model_path, 'wb') as file:
+            pickle.dump(self.model, file)
+
+    def train_pca(self):
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_pca_data(), \
+                                          daystart=PRED_WEEK_START)
+        pca = PCA()
+        pca.fit(np.array(electric_data[HOURS]))
+        self.pca = pca
+        self.trained_pca = True
+        
+    def train_model(self):
+        # Prepare pca & load data
+        if not self.trained_pca: self.train_pca()
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_electric_data(), \
+                                          daystart=PRED_WEEK_START)
+        weather_data = get_weather_data_hourly(self.zone, \
+                                               self._request_train_weather_data(), \
+                                               daystart=PRED_WEEK_START, data_dir=self.pca_input_dir)
+
+        # Prepare x
+        x_train = weather_data[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_train[weekday] = (weather_data['day_of_week'] == i).astype(int)
+        self.train_year_list = list(weather_data['year'].unique())[:-1]
+        for year in self.train_year_list:
+            x_train[f'year{year}'] = (weather_data['year'] == year).astype(int)
+        x_train['wkd1'] = ((weather_data['relative_week']==-1) & \
+                           (weather_data['day_of_week'].isin([3, 4, 5]))).astype(int)
+        x_train['wkd2'] = ((weather_data['relative_week']== 0) & \
+                           (weather_data['day_of_week'].isin([3, 4, 5]))).astype(int)
+
+        # Prepare y
+        electric_data_np = np.array(electric_data[HOURS])
+        electric_data_proj = self.pca.transform(electric_data_np)[:, :self.num_PC]
+        column_names = [f'PC{i+1}' for i in range(self.num_PC)]
+        y_train = pd.DataFrame(data=electric_data_proj, columns=column_names)
+
+        # Fit model
+        model = LinearRegression(fit_intercept=True)
+        model.fit(x_train, y_train)
+        self.model = model
+        self.trained = True
+
+    def predict(self, week, day, year=None, weather=None):
+        if weather is None:
+            assert False, 'Prediction needs weather data'
+        if self.trained == False:
+            assert False, "Model not trained"
+        if year is None: year = self.year
+        x_pred = weather[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_pred[weekday] = (weather['day_of_week'] == i).astype(int)
+        for year in self.train_year_list:
+            x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
+        x_pred['wkd1'] = ((weather['relative_week']==-1) & \
+                          (weather['day_of_week'].isin([3, 4, 5]))).astype(int)
+        x_pred['wkd2'] = ((weather['relative_week']== 0) & \
+                          (weather['day_of_week'].isin([3, 4, 5]))).astype(int)
+        y_pred = np.array(self.model.predict(x_pred))
+        return y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_
+    
+    def test_model(self):
+        if self.year == 2025:
+            assert False, "No testing available for this year!"
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_test_electric_data(), \
+                                          daystart=PRED_WEEK_START)[HOURS]
+        weather_data = get_weather_data_hourly(self.zone, \
+                                               self._request_test_weather_data(), \
+                                               daystart=PRED_WEEK_START, data_dir=self.pca_input_dir)
+        day_predicts = format_request(self._request_test_electric_data())
+        electric_predict = self.predict(week=day_predicts['relative_week'], \
+                                        day=day_predicts['day_of_week'], \
+                                        year=day_predicts['year'], weather=weather_data)
+        electric_data_np = np.array(electric_data)
+        electric_predict_np = np.array(electric_predict)
+        peak_days = np.array([1, 1, 0, 0, 1, 1, 1, 0, 0, 1])
+        return calculate_loss(electric_predict_np, electric_data_np, peak_days)
+    
+    def predict_request(self, request): 
+        weather_data = get_weather_data_hourly(self.zone, request, daystart=PRED_WEEK_START, \
+                                               data_dir=self.pca_input_dir)
+        day_predicts = format_request(request)
+        return self.predict(week=day_predicts['relative_week'], \
+                            day=day_predicts['day_of_week'], \
+                            year=day_predicts['year'], \
+                            weather=weather_data)
+    
+class Ampere2(PCAWeatherRegressionPipeline):
+    '''
+    Main prediction pipeline - version using cross-zone information
+    '''
+    def __init__(self, param_dir, \
+                 zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=5, \
+                 pca_input_dir = 'data/data_weather_hourly_processed'):
+        super().__init__(zone, year, train_year, train_year_pca, num_PC, pca_input_dir)
+        if train_year_pca == None: train_year_pca = train_year
+        self.correction_model = None
+        self.metered_variance = 1.
+        self._load_global_params(param_dir)
+
+    def _load_global_params(self, param_dir):
+        with open(f'{param_dir}/linreg_correction.pkl', 'rb') as file:
+            self.correction_model = pickle.load(file)
+        with open(f'{param_dir}/variances.json', 'r') as file:
+            self.metered_variance = json.load(file)[self.zone]
+        self.load_pca(f'{param_dir}/pca_global.pkl')
+
+    def train_model(self):
+        # Prepare pca & load data
+        if not self.trained_pca: assert False, 'pca has to be preloaded'
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_electric_data(), \
+                                          daystart=PRED_WEEK_START)
+        weather_data = get_weather_data_hourly(self.zone, \
+                                               self._request_train_weather_data(), \
+                                               daystart=PRED_WEEK_START, data_dir=self.pca_input_dir)
+
+        # Prepare x
+        x_train = weather_data[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_train[weekday] = (weather_data['day_of_week'] == i).astype(int)
+        self.train_year_list = list(weather_data['year'].unique())[:-1]
+        for year in self.train_year_list:
+            x_train[f'year{year}'] = (weather_data['year'] == year).astype(int)
+
+        # Prepare y
+        electric_data_np = np.array(electric_data[HOURS])
+        electric_data_proj = self.pca.transform(electric_data_np/np.sqrt(self.metered_variance))[:, :self.num_PC]
+        column_names = [f'PC{i+1}' for i in range(self.num_PC)]
+        y_train = pd.DataFrame(data=electric_data_proj, columns=column_names)
+
+        # Fit model
+        model = LinearRegression(fit_intercept=True)
+        model.fit(x_train, y_train)
+        self.model = model
+        self.trained = True
+
+    def predict(self, week, day, year=None, weather=None, with_correction=True):
+        if weather is None:
+            assert False, 'Prediction needs weather data'
+        if self.trained == False:
+            assert False, "Model not trained"
+        if year is None: year = self.year
+        x_pred = weather[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_pred[weekday] = (weather['day_of_week'] == i).astype(int)
+        for year in self.train_year_list:
+            x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
+        y_pred = np.array(self.model.predict(x_pred))
+        if with_correction:
+            day_mask = np.array([-1]*len(weather), dtype='int')
+            day_mask += np.array((weather['relative_week'] == -1) & (weather['day_of_week'] == 3)).astype(int)*1
+            day_mask += np.array((weather['relative_week'] == -1) & (weather['day_of_week'] == 4)).astype(int)*2
+            day_mask += np.array((weather['relative_week'] == -1) & (weather['day_of_week'] == 5)).astype(int)*3
+            day_mask += np.array((weather['relative_week'] ==  0) & (weather['day_of_week'] == 3)).astype(int)*4
+            day_mask += np.array((weather['relative_week'] ==  0) & (weather['day_of_week'] == 4)).astype(int)*5
+            day_mask += np.array((weather['relative_week'] ==  0) & (weather['day_of_week'] == 5)).astype(int)*6
+            y_pred_masked = y_pred[day_mask != -1].copy()
+            day_mask_positive = day_mask[day_mask != -1].copy()
+            y_adjust = np.hstack([y_pred_masked,
+                                (day_mask_positive == 0).astype(int)[:, None], 
+                                (day_mask_positive == 1).astype(int)[:, None], 
+                                (day_mask_positive == 2).astype(int)[:, None], 
+                                (day_mask_positive == 3).astype(int)[:, None], 
+                                (day_mask_positive == 4).astype(int)[:, None]])
+            y_pred[day_mask != -1] = self.correction_model.predict(y_adjust)
+        return (y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_) * np.sqrt(self.metered_variance)
+
+class Ampere3(PCAWeatherRegressionPipeline):
+    '''
+    Main prediction pipeline - version using cross-zone information
+    '''
+    def __init__(self, param_dir, correction_days, \
+                 zone='AECO', year=2024, train_year=3, train_year_pca=None, num_PC=5, \
+                 pca_input_dir = 'data/data_weather_hourly_processed'):
+        super().__init__(zone, year, train_year, train_year_pca, num_PC, pca_input_dir)
+        if train_year_pca == None: train_year_pca = train_year
+        self.correction_models = dict()
+        self.correction_days = correction_days
+        self.metered_variance = 1.
+        self._load_global_params(param_dir)
+
+    def _load_global_params(self, param_dir):
+        self.correction_models = dict()
+        for d, w in self.correction_days:
+            with open(f'{param_dir}/linreg_correction_{to_string(w)}_{d}.pkl', 'rb') as file:
+                self.correction_models[(d, w)] = pickle.load(file)
+        with open(f'{param_dir}/variances.json', 'r') as file:
+            self.metered_variance = json.load(file)[self.zone]
+        self.load_pca(f'{param_dir}/pca_global.pkl')
+
+    def _request_train_electric_data(self):
+        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
+                  for i in range(self.year, self.year-self.train_year_pca, -1)}
+        return output
+
+    def train_model(self):
+        # Prepare pca & load data
+        if not self.trained_pca: assert False, 'pca has to be preloaded'
+        electric_data = get_electric_data(self.zone, \
+                                          self._request_train_electric_data(), \
+                                          daystart=PRED_WEEK_START)
+        weather_data = get_weather_data_hourly(self.zone, \
+                                               self._request_train_weather_data(), \
+                                               daystart=PRED_WEEK_START, data_dir=self.pca_input_dir)
+
+        # Prepare x
+        x_train = weather_data[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_train[weekday] = (weather_data['day_of_week'] == i).astype(int)
+        self.train_year_list = list(weather_data['year'].unique())[:-1]
+        for year in self.train_year_list:
+            x_train[f'year{year}'] = (weather_data['year'] == year).astype(int)
+
+        # Prepare y
+        electric_data_np = np.array(electric_data[HOURS])
+        electric_data_proj = self.pca.transform(electric_data_np/np.sqrt(self.metered_variance))[:, :self.num_PC]
+        column_names = [f'PC{i+1}' for i in range(self.num_PC)]
+        y_train = pd.DataFrame(data=electric_data_proj, columns=column_names)
+
+        # Fit model
+        model = LinearRegression(fit_intercept=True)
+        model.fit(x_train, y_train)
+        self.model = model
+        self.trained = True
+
+    def predict(self, week, day, year=None, weather=None, with_correction=True):
+        if weather is None:
+            assert False, 'Prediction needs weather data'
+        if self.trained == False:
+            assert False, "Model not trained"
+        if year is None: year = self.year
+        x_pred = weather[self.input_features].copy()
+        for i, weekday in enumerate(WEEKDAYS[:-1]):
+            x_pred[weekday] = (weather['day_of_week'] == i).astype(int)
+        for year in self.train_year_list:
+            x_pred[f'year{year}'] = (weather['year'] == year).astype(int)
+        y_pred = np.array(self.model.predict(x_pred))
+        if with_correction:
+            for d, w in self.correction_days:
+                day_mask = np.array([0]*len(weather), dtype='int')
+                day_mask += np.array((weather['relative_week'] == w) & (weather['day_of_week'] == d)).astype(int)
+                if np.sum(day_mask) != 0:
+                    y_pred_masked = y_pred[day_mask != 0].copy()
+                    y_pred[day_mask != 0] = self.correction_models[(d, w)].predict(y_pred_masked)
+        return (y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_) * np.sqrt(self.metered_variance)
+
+    

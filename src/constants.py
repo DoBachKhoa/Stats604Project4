@@ -1,5 +1,6 @@
 WEATHER_FEATURES = ['tavg', 'tmin', 'tmax', 'prcp', 'snow', 'wspd', 'pres']
 WEATHER_FEATURES_HOURLY = ['temp', 'dwpt', 'rhum', 'prcp', 'wspd', 'pres']
+WEATHER_FEATURES_HOURLY_COUNTS = { 'temp': 2, 'dwpt': 2, 'rhum': 1, 'prcp': 4, 'wspd': 1, 'pres': 1}
 ZONES = ['AECO', 'AEPAPT', 'AEPIMP', 'AEPKPT', 'AEPOPT', 'AP', 'BC', 'CE', \
          'DAY', 'DEOK', 'DOM', 'DPLCO', 'DUQ', 'EASTON', 'EKPC', 'JC', 'ME', \
          'OE', 'OVEC', 'PAPWR', 'PE', 'PEPCO', 'PLCO', 'PN', 'PS', 'RECO', \

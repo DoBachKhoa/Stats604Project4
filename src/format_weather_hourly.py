@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn.decomposition import PCA
-from src.constants import ZONES, HOURS, WEATHER_FEATURES_HOURLY
+from src.constants import ZONES, HOURS, WEATHER_FEATURES_HOURLY, WEATHER_FEATURES_HOURLY_COUNTS
 
 def format_weather_hourly_pca(features, counts, zones=ZONES):
 
@@ -43,15 +43,8 @@ def format_weather_hourly_pca(features, counts, zones=ZONES):
     return variance_explain
 
 if __name__ == '__main__':
-    counts = {
-        'temp': 2,
-        'dwpt': 2,
-        'rhum': 1,
-        'prcp': 4,
-        'wspd': 1,
-        'pres': 1
-    }
-    json_name = 'data/data_weather_hourly_processed/counts_json'
+    counts = WEATHER_FEATURES_HOURLY_COUNTS
+    json_name = 'data/data_weather_hourly_processed/counts.json'
     with open(json_name, 'w') as f:
         json.dump(counts, f, indent=4)
     variance_explain = format_weather_hourly_pca(features=list(counts.keys()), counts=counts, zones=ZONES)

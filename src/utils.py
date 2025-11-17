@@ -1,9 +1,13 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from src.constants import THANKSGIVING
+from src.constants import THANKSGIVING, PRED_WEEK_START
 
-def slide_week_day(week1, week2, day1=None, day2=None, daystart=0):
+def to_string(n):
+    if n < 0: return f'neg{abs(n)}'
+    return f'{n}'
+
+def slide_week_day(week1, week2, day1=None, day2=None, daystart=PRED_WEEK_START):
     if day1 == None: day1 = daystart
     if day2 == None: day2 = daystart
     output = [[day1, week1]]
@@ -13,6 +17,7 @@ def slide_week_day(week1, week2, day1=None, day2=None, daystart=0):
         if d == 7: d = 0
         if d == daystart: w += 1
         if w == week2 and d == day2: return output
+        if w > week2: assert False
         else: output.append([d, w])
 
 def add_relative_week_column(df, date_col, year, week_start=0):

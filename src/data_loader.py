@@ -23,3 +23,10 @@ def get_weather_data(zone, request, daystart=PRED_WEEK_START):
     request_days = format_request(request)
     data = pd.read_csv(f'data/data_weather/weather_data_{zone}.csv', index_col=0)
     return data.merge(request_days, on=['year', 'relative_week', 'day_of_week'], how='inner')
+
+def get_weather_data_hourly(zone, request, daystart=PRED_WEEK_START, \
+                            data_dir = 'data/data_weather_hourly_processed'):
+    if daystart != PRED_WEEK_START: raise NotImplementedError
+    request_days = format_request(request)
+    data = pd.read_csv(f'{data_dir}/weather_data_pca_{zone}.csv', index_col=0)
+    return data.merge(request_days, on=['year', 'relative_week', 'day_of_week'], how='inner')
