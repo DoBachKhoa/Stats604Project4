@@ -83,12 +83,6 @@ def load_weather_hourly(years=[2022, 2023, 2024, 2025], zones=ZONES, features=WE
             if data_all.isna().any().any() and fillna:
                 print(year, zone, feature)
                 assert False, "There are still na's in the data!"
-            # if zone == 'JC':
-            #     print('check')
-            #     pd.set_option('display.max_columns', None)
-            #     print(data_all.dtypes, data_all.isna().any().any())
-            #     print(data_all.applymap(type).head())
-            #     print(data_all.loc[(data_all['year']==2023) & (data_all['relative_week']==-15) & (data_all['day_of_week']==3)])
             data_all.to_csv(directory+f'/weather_{zone}.csv')
 
 

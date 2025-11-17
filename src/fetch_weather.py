@@ -144,7 +144,7 @@ def save_weather_data(weather_features=WEATHER_FEATURES, zones=ZONES, fillna=Fal
     '''
     # Load zone coordinate data
     if df_coords is None: df_coords = pd.read_csv('data/zone_locations.csv')[['zone', 'lon', 'lat']]
-    output = {zone: pd.DataFrame(columns=weather_features+['year', 'relative_week', 'day_of_week']) for zone in zones}
+    output = {zone: None for zone in zones}
     starts_ends = [[i, 1, 12] for i in range(2022, 2025)] + [[2025, 1, 10]]
 
     for year, start_month, end_month in starts_ends:
@@ -155,7 +155,8 @@ def save_weather_data(weather_features=WEATHER_FEATURES, zones=ZONES, fillna=Fal
             data_year = add_relative_week_column(data_year, 'date', year, week_start=6)
             data_year['year'] = data_year['date'].dt.year
             data_year.drop('date', axis=1, inplace=True)
-            output[zone] = pd.concat([output[zone], data_year], ignore_index=True)
+            if output[zone] is None: output[zone] = data_year.copy()
+            else: output[zone] = pd.concat([output[zone], data_year], ignore_index=True)
 
     for zone in zones:
         output[zone].to_csv(f'data/data_weather_daily/weather_data_{zone}.csv')

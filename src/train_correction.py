@@ -47,7 +47,7 @@ class PCAGlobalPipeline(PCAWeatherRegressionPipeline):
         self.metered_variance = 1.
     
     def _request_train_electric_data(self):
-        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
+        output = {i: slide_week_day(-10, -4, daystart=PRED_WEEK_START) \
                   for i in range(self.year, self.year-self.train_year_pca, -1)}
         return output
     
@@ -139,8 +139,8 @@ def train_correction_model(param_path, year=2024, train_year=3, num_PC=5,
         x_train[f'daycode{i}'] = (day_code == i).astype(int)
 
     # Train the linear model
-    print(x_train.head(5))
-    print(y_train.head(5))
+    # print(x_train.head(5))
+    # print(y_train.head(5))
     model = LinearRegression(fit_intercept=True)
     model.fit(x_train, y_train)
 
@@ -189,8 +189,6 @@ def train_correction_model_by_day(param_path, year=2024, train_year=3, num_PC=5,
     y_train = pd.DataFrame(ground_truths_np, columns=column_names)
 
     for d, w in days:
-        print(d, w)
-
         # Mask which day to correct & extract these days out of data
         day_code = [0]*14
         day_code[w*7+7+((d+1)%7)] = 1
@@ -200,7 +198,7 @@ def train_correction_model_by_day(param_path, year=2024, train_year=3, num_PC=5,
 
         # Train the linear model
         model = LinearRegression(fit_intercept=True)
-        model.fit(x_train, y_train)
+        model.fit(x_train_temp, y_train_temp)
 
         # Save the linear model
         with open(f'{param_path}/linreg_correction_{to_string(w)}_{to_string(d)}.pkl', 'wb') as file:

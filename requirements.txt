@@ -1,4 +1,5 @@
 tqdm
+requests
 scipy
 pandas
 sklearn
