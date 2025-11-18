@@ -12,6 +12,8 @@ WORKDIR /app
 # Install OS deps (make, gcc, etc.).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
         git \
         make \
         python3-dev \
@@ -26,7 +28,6 @@ COPY data/ ./data
 COPY src/ ./src
 
 # Virtual env, data, pretrains
-RUN touch data/data_metered_raw
 RUN make venv VERBOSE=1
 RUN make process-data
 RUN make pca-params

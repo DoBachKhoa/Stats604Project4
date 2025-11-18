@@ -47,8 +47,9 @@ class PCAGlobalPipeline(PCAWeatherRegressionPipeline):
         self.metered_variance = 1.
     
     def _request_train_electric_data(self):
-        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
-                  for i in range(self.year, self.year-self.train_year_pca, -1)}
+        output = {i: slide_week_day(-10, 2, daystart=PRED_WEEK_START) \
+                  for i in range(self.year-1, self.year-self.train_year_pca, -1)}
+        output[self.year] = slide_week_day(-10, -3, daystart=PRED_WEEK_START)
         return output
     
     def train_model(self):

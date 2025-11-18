@@ -769,13 +769,14 @@ class Edison(PCAWeatherRegressionPipeline):
             day_mask += np.array((weather['relative_week'] ==  0) & (weather['day_of_week'] == 5)).astype(int)*6
             y_pred_masked = y_pred[day_mask != -1].copy()
             day_mask_positive = day_mask[day_mask != -1].copy()
-            y_adjust = np.hstack([y_pred_masked,
-                                (day_mask_positive == 0).astype(int)[:, None], 
-                                (day_mask_positive == 1).astype(int)[:, None], 
-                                (day_mask_positive == 2).astype(int)[:, None], 
-                                (day_mask_positive == 3).astype(int)[:, None], 
-                                (day_mask_positive == 4).astype(int)[:, None]])
-            y_pred[day_mask != -1] = self.correction_model.predict(y_adjust)
+            if len(y_pred_masked) != 0:
+                y_adjust = np.hstack([y_pred_masked,
+                                    (day_mask_positive == 0).astype(int)[:, None], 
+                                    (day_mask_positive == 1).astype(int)[:, None], 
+                                    (day_mask_positive == 2).astype(int)[:, None], 
+                                    (day_mask_positive == 3).astype(int)[:, None], 
+                                    (day_mask_positive == 4).astype(int)[:, None]])
+                y_pred[day_mask != -1] = self.correction_model.predict(y_adjust)
         return (y_pred @ self.pca.components_[:self.num_PC] + self.pca.mean_) * np.sqrt(self.metered_variance)
 
 class Ampere(PCAWeatherRegressionPipeline):
@@ -815,8 +816,9 @@ class Ampere(PCAWeatherRegressionPipeline):
         self.load_pca(f'{param_dir}/pca_global.pkl')
 
     def _request_train_electric_data(self):
-        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
+        output = {i: slide_week_day(-10, 2, daystart=PRED_WEEK_START) \
                   for i in range(self.year, self.year-self.train_year_pca, -1)}
+        output[self.year] = slide_week_day(-10, -3, daystart=PRED_WEEK_START)
         return output
 
     def train_model(self):
