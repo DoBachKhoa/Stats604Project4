@@ -34,7 +34,7 @@ def get_electric_data(zone, request, daystart=PRED_WEEK_START):
 def get_weather_data(zone, request, daystart=PRED_WEEK_START):
     if daystart != PRED_WEEK_START: raise NotImplementedError
     request_days = format_request(request)
-    data = pd.read_csv(f'data/data_weather/weather_data_{zone}.csv', index_col=0)
+    data = pd.read_csv(f'data/data_weather_daily/weather_data_{zone}.csv', index_col=0)
     return data.merge(request_days, on=['year', 'relative_week', 'day_of_week'], how='inner')
 
 def get_weather_data_hourly(zone, request, daystart=PRED_WEEK_START, \

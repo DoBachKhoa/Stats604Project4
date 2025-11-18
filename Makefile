@@ -54,7 +54,7 @@ $(DATA_WEATHER_HOURLY_PROCESSED_DIR) : $(VENV_DIR) $(DATA_WEATHER_HOURLY_RAW_DIR
 	@$(VENV_PY) -m src.format_weather_hourly
 	@touch $(DATA_WEATHER_HOURLY_PROCESSED_DIR)
 
-$(PCA_ENCODING_PARAMS_DIR) : $(VENV_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR) src/train_correction.py
+$(PCA_ENCODING_PARAMS_DIR) : $(VENV_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR) $(DATA_WEATHER_DAILY_DIR) src/train_correction.py
 	@echo "Creating global pca metered encodings ... "
 	@mkdir -p $(PCA_ENCODING_PARAMS_DIR)
 	@$(VENV_PY) -m src.train_correction
@@ -62,7 +62,7 @@ $(PCA_ENCODING_PARAMS_DIR) : $(VENV_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR) sr
 
 pca-params : $(PCA_ENCODING_PARAMS_DIR)
 
-predictions : $(VENV_DIR) src/make_predictions.py
+predictions : $(VENV_DIR) $(DATA_METERED_PROCESSED_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR) $(PCA_ENCODING_PARAMS_DIR) src/make_predictions.py
 	@$(VENV_PY) -m src.make_predictions
 
 process-weather-data : $(DATA_WEATHER_DAILY_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR)

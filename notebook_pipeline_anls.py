@@ -50,14 +50,14 @@ pipelines = {
     'Faraday' : (Faraday, {'train_year': 3, 'train_year_pca': 3, 'num_PC': 5, \
                            'pca_input_dir' : 'data/data_weather_hourly_processed'}),
     'Edison' : (Edison, {'train_year': 3, 'train_year_pca': 3, 'num_PC': 5, \
-                         'pca_input_dir' : 'data/data_weather_hourly_processed', 'param_dir': 'params/global_param_2024'}),
+                         'pca_input_dir' : 'data/data_weather_hourly_processed', 'param_dir': 'pca_params/global_params_2024'}),
     'Ampere' : (Ampere, {'train_year': 3, 'train_year_pca': 3, 'num_PC': 5, \
                          'correction_days': [[3, 0], [4, 0], [5, 0]],\
-                         'pca_input_dir' : 'data/data_weather_hourly_processed', 'param_dir': 'params/global_param_2024'}),
+                         'pca_input_dir' : 'data/data_weather_hourly_processed', 'param_dir': 'pca_params/global_params_2024'}),
                          # Correcting last 3 days in the 10 day periods
     'AmpereAll' : (Ampere, {'train_year': 3, 'train_year_pca': 3, 'num_PC': 5, \
                             'correction_days': slide_week_day(-1, 1),\
-                            'pca_input_dir' : 'data/data_weather_hourly_processed', 'param_dir': 'params/global_param_2024'})
+                            'pca_input_dir' : 'data/data_weather_hourly_processed', 'param_dir': 'pca_params/global_params_2024'})
                             # Correcting every day in the 10 day periods
 }
 

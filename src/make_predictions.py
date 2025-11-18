@@ -18,7 +18,7 @@ if __name__ == '__main__':
     output_peak_all = []
     print(f'"{tomorrow}"', end='')
     for zone in ZONES:
-        pipeline = Ampere(param_dir='params/global_param_2024', correction_days=slide_week_day(-1, 1, daystart=PRED_WEEK_START), \
+        pipeline = Ampere(param_dir='pca_params/global_params_2024', correction_days=slide_week_day(-1, 1, daystart=PRED_WEEK_START), \
                         zone=zone, year=datetime.now().year, train_year=4, num_PC=5, pca_input_dir='data/data_weather_hourly_processed')
         pipeline.train_model()
         weather = hourly_open_meteo(zone, WEATHER_FEATURES_HOURLY_COUNTS, tomorrow)
