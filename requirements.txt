@@ -2,7 +2,7 @@ tqdm
 requests
 scipy
 pandas
-sklearn
+scikit-learn
 matplotlib
 meteostat
 jupytext
