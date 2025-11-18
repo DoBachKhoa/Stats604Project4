@@ -815,7 +815,7 @@ class Ampere(PCAWeatherRegressionPipeline):
         self.load_pca(f'{param_dir}/pca_global.pkl')
 
     def _request_train_electric_data(self):
-        output = {i: slide_week_day(-10, -4, daystart=PRED_WEEK_START) \
+        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
                   for i in range(self.year, self.year-self.train_year_pca, -1)}
         return output
 

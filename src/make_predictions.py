@@ -30,4 +30,5 @@ if __name__ == '__main__':
     for num in output_hour_load: print(f', {np.round(num, 4)}', end='')
     for num in output_peak_day: print(f', {num[0]}', end='')
     for num in output_peak_all: print(f', {num}', end='')
+    print()
 

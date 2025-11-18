@@ -23,7 +23,7 @@ def fetch_weather_hourly_feature(year, zone, feature='temp', fillna=False, df_co
     # Load zone coordinate data
     if df_coords is None: df_coords = pd.read_csv('data/zone_locations.csv')[['zone', 'lon', 'lat']]
     start = datetime(year, 1, 1)
-    end = datetime(year+1, 1, 1) if year < 2025 else datetime(year, 11, 1)
+    end = datetime(year+1, 1, 1) if year < 2025 else datetime(year, 10, 31)
 
     # Look up coordinate of zone
     lon_coord = df_coords.loc[df_coords['zone']==zone]['lon'].iloc[0]

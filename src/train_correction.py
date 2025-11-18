@@ -47,7 +47,7 @@ class PCAGlobalPipeline(PCAWeatherRegressionPipeline):
         self.metered_variance = 1.
     
     def _request_train_electric_data(self):
-        output = {i: slide_week_day(-10, -4, daystart=PRED_WEEK_START) \
+        output = {i: slide_week_day(-10, -2, daystart=PRED_WEEK_START) \
                   for i in range(self.year, self.year-self.train_year_pca, -1)}
         return output
     
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     # Make correction model for data in year 2025
     print("Train a pca encoding for data prior to 2025 thanksgiving")
     request = {year: slide_week_day(-10, 3, daystart=PRED_WEEK_START) for year in [2022, 2023, 2024]}
-    request[2025] = slide_week_day(-10, -4, daystart=PRED_WEEK_START)
+    request[2025] = slide_week_day(-10, -3, daystart=PRED_WEEK_START)
     param_path = 'pca_params/global_params_2025'
     os.makedirs(param_path, exist_ok=True)
     generate_pca_metered(request=request, param_path=param_path)

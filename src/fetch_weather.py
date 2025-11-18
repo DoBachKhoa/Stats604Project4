@@ -85,6 +85,7 @@ def fetch_weather_data(year=2024, start_month=9, end_month=11, weather_features=
     if df_coords is None: df_coords = pd.read_csv('data/zone_locations.csv')[['zone', 'lon', 'lat']]
     start = datetime(year, start_month, 1)
     if end_month == 2 and year in LEAPS: end_date = 29
+    elif end_month == 10 and year == 2025: end_date = 30
     else: end_date = MONTH[end_month-1]
     end = datetime(year, end_month, end_date)
 

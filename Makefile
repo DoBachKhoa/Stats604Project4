@@ -8,15 +8,18 @@ PIP := python3 -m pip
 VENV_DIR := .venv
 VENV_PY := $(VENV_DIR)/bin/$(PY)
 VENV_PIP := $(VENV_DIR)/bin/$(PIP)
+
+# Data dir abbreviations
+DATA_METERED_RAW = data/data_metered_raw
 DATA_METERED_PROCESSED_DIR = data/data_metered_processed
 DATA_WEATHER_DAILY_DIR = data/data_weather_daily
 DATA_WEATHER_HOURLY_RAW_DIR = data/data_weather_hourly_raw
 DATA_WEATHER_HOURLY_PROCESSED_DIR = data/data_weather_hourly_processed
 PCA_ENCODING_PARAMS_DIR = pca_params
-# Virtual environment
 
 all : venv process-data pca-params notebooks
 
+# Virtual environment
 notebooks : $(VENV_DIR) notebook_pca_anls.py notebook_pipeline_anls.py
 	@echo "Creating .ipynb notebooks ... "
 	@$(VENV_PY) -m jupytext --to ipynb notebook_pca_anls.py
@@ -30,7 +33,13 @@ $(VENV_DIR) : requirements.txt # check requirement changes
 
 venv : $(VENV_DIR)
 
-$(DATA_METERED_PROCESSED_DIR) : $(VENV_DIR) src/format_metered.py
+$(DATA_METERED_RAW) : $(VENV_DIR) src/fetch_metered.py
+	@echo "Re-downloading metered data ... "
+	@mkdir -p $(DATA_METERED_PROCESSED_DIR)
+	@$(VENV_PY) -m src.fetch_metered
+	@touch $(DATA_METERED_PROCESSED_DIR)
+
+$(DATA_METERED_PROCESSED_DIR) : $(VENV_DIR) $(DATA_METERED_RAW) src/format_metered.py
 	@echo "Processing metered data ... "
 	@mkdir -p $(DATA_METERED_PROCESSED_DIR)
 	@$(VENV_PY) -m src.format_metered
@@ -64,6 +73,7 @@ pca-params : $(PCA_ENCODING_PARAMS_DIR)
 
 predictions : $(VENV_DIR) $(DATA_METERED_PROCESSED_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR) $(PCA_ENCODING_PARAMS_DIR) src/make_predictions.py
 	@$(VENV_PY) -m src.make_predictions
+	@exit
 
 process-weather-data : $(DATA_WEATHER_DAILY_DIR) $(DATA_WEATHER_HOURLY_PROCESSED_DIR)
 
@@ -71,10 +81,11 @@ process-metered-data : $(DATA_METERED_PROCESSED_DIR)
 
 process-data : process-metered-data process-weather-data
 
-rawdata : clean-data $(DATA_WEATHER_DAILY_DIR) $(DATA_WEATHER_HOURLY_RAW_DIR)
+rawdata : clean-data $(DATA_METERED_RAW_DIR) $(DATA_WEATHER_DAILY_DIR) $(DATA_WEATHER_HOURLY_RAW_DIR)
 
 # Clean ups
 clean-data: 
+	@rm -rf $(DATA_METERED_RAW_DIR)
 	@rm -rf $(DATA_METERED_PROCESSED_DIR)
 	@rm -rf $(DATA_WEATHER_DAILY_DIR)
 	@rm -rf $(DATA_WEATHER_HOURLY_RAW_DIR)
